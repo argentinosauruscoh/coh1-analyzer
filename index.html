@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COH1 Replay Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── Reset & base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --olive:    #4a5240;
+    --olive-lt: #6b7560;
+    --cream:    #e8e2d0;
+    --parchment:#f2edd8;
+    --carbon:   #141410;
+    --ink:      #1e1e18;
+    --rust:     #c0601a;
+    --usa-col:  #3a6ea8;
+    --brit-col: #2e7d4f;
+    --wehr-col: #5a5a3a;
+    --panz-col: #8a4a1a;
+    --font-display: 'Bebas Neue', Impact, sans-serif;
+    --font-body:    'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    background: var(--carbon);
+    color: var(--cream);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 2px solid var(--olive);
+    padding: 1.5rem 2rem;
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+  }
+  header h1 {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    letter-spacing: 0.04em;
+    color: var(--cream);
+    line-height: 1;
+  }
+  header span.sub {
+    font-size: 0.75rem;
+    color: var(--olive-lt);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* ── Main layout ── */
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3rem 1.5rem 4rem;
+    gap: 2.5rem;
+  }
+
+  /* ── Drop zone ── */
+  .drop-zone {
+    width: 100%;
+    max-width: 560px;
+    border: 2px dashed var(--olive);
+    border-radius: 4px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .drop-zone:hover,
+  .drop-zone.drag-over {
+    border-color: var(--rust);
+    background: rgba(192, 96, 26, 0.06);
+  }
+  .drop-zone input[type="file"] {
+    position: absolute; inset: 0;
+    opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon {
+    font-size: 2.5rem;
+    line-height: 1;
+    margin-bottom: 0.75rem;
+    display: block;
+  }
+  .drop-zone p.label {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    letter-spacing: 0.05em;
+    color: var(--cream);
+  }
+  .drop-zone p.hint {
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--olive-lt);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .drop-zone p.selected-name {
+    margin-top: 0.8rem;
+    font-size: 0.85rem;
+    color: var(--rust);
+    font-weight: 600;
+  }
+
+  /* ── Button ── */
+  .btn {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    letter-spacing: 0.1em;
+    background: var(--rust);
+    color: var(--cream);
+    border: none;
+    padding: 0.75rem 2.5rem;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .btn:hover { background: #d97030; }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { background: var(--olive); cursor: not-allowed; opacity: 0.6; }
+
+  /* ── Status / error ── */
+  .status-msg {
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--olive-lt);
+  }
+  .status-msg.error { color: #e05555; }
+
+  /* ── Spinner ── */
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid var(--olive);
+    border-top-color: var(--rust);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .spinner.active { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Results card ── */
+  #results {
+    width: 100%;
+    max-width: 700px;
+    display: none;
+    flex-direction: column;
+    gap: 1.5rem;
+    animation: fadeUp 0.4s ease both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  #results.visible { display: flex; }
+
+  /* meta bar */
+  .meta-bar {
+    background: var(--ink);
+    border: 1px solid var(--olive);
+    border-radius: 4px;
+    padding: 1.25rem 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem 1.5rem;
+  }
+  .meta-item label {
+    display: block;
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--olive-lt);
+    margin-bottom: 0.25rem;
+  }
+  .meta-item .value {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    letter-spacing: 0.03em;
+    color: var(--cream);
+    line-height: 1.1;
+  }
+  .meta-item .value.version {
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  /* ── Section heading ── */
+  .section-heading {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    letter-spacing: 0.12em;
+    color: var(--olive-lt);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--olive);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.75rem;
+  }
+
+  /* ── Players grid ── */
+  .players-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .player-card {
+    background: var(--ink);
+    border: 1px solid var(--olive);
+    border-radius: 4px;
+    padding: 1.25rem 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  /* Team color strip on left edge */
+  .player-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+  }
+  .player-card.team-0::before { background: #3a6ea8; }
+  .player-card.team-1::before { background: #b84040; }
+
+  .player-faction-badge {
+    display: inline-block;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    letter-spacing: 0.12em;
+    padding: 0.15rem 0.55rem;
+    border-radius: 2px;
+    margin-bottom: 0.6rem;
+  }
+  .faction-USA  { background: rgba(58,110,168,0.25); color: #7aabdc; border: 1px solid #3a6ea8; }
+  .faction-BRIT { background: rgba(46,125,79,0.25);  color: #6ec99a; border: 1px solid #2e7d4f; }
+  .faction-WEHR { background: rgba(90,90,58,0.25);   color: #b8b87a; border: 1px solid #5a5a3a; }
+  .faction-PANZ { background: rgba(138,74,26,0.25);  color: #d4956a; border: 1px solid #8a4a1a; }
+
+  .player-name {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    letter-spacing: 0.04em;
+    color: var(--cream);
+    line-height: 1.1;
+    word-break: break-word;
+  }
+  .player-meta {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--olive-lt);
+  }
+  .player-meta span { margin-right: 0.75rem; }
+  .player-meta .type-local  { color: #7aabdc; }
+  .player-meta .type-remote { color: #6ec99a; }
+  .player-meta .type-ai     { color: #d4956a; }
+
+  .team-label {
+    position: absolute;
+    top: 0.75rem; right: 1rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--olive-lt);
+  }
+
+  /* ── Chat section ── */
+  .chat-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .chat-msg {
+    background: var(--ink);
+    border: 1px solid var(--olive);
+    border-radius: 2px;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.85rem;
+    color: var(--cream);
+  }
+  .chat-msg .chat-sender {
+    font-weight: 600;
+    color: var(--rust);
+    margin-right: 0.4rem;
+  }
+  .no-chat {
+    font-size: 0.8rem;
+    color: var(--olive-lt);
+    font-style: italic;
+  }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    padding: 1.5rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--olive);
+    border-top: 1px solid var(--olive);
+  }
+
+
+  /* ── Events ── */
+  .event-player { margin-bottom: 1.25rem; }
+  .event-player-name {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    letter-spacing: 0.05em;
+    color: var(--cream);
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+  .event-group-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--olive-lt);
+    margin: 0.4rem 0 0.25rem;
+  }
+  .event-list { display: flex; flex-direction: column; gap: 0.2rem; }
+  .event-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    background: var(--ink);
+    border: 1px solid var(--olive);
+    border-radius: 2px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.82rem;
+  }
+  .event-time { color: var(--rust); font-weight: 600; flex-shrink: 0; font-size: 0.75rem; }
+  .event-name { color: var(--cream); }
+  .event-count { margin-left: auto; color: var(--olive-lt); font-size: 0.75rem; }
+
+  @media (max-width: 480px) {
+    header { flex-direction: column; gap: 0.25rem; }
+    .meta-bar { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>COH1 Replay Analyzer</h1>
+  <span class="sub">Company of Heroes</span>
+</header>
+
+<main>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".rec">
+    <span class="drop-icon">🎖️</span>
+    <p class="label">Drop your replay here</p>
+    <p class="hint">.rec files only</p>
+    <p class="selected-name" id="selectedName"></p>
+  </div>
+
+  <button class="btn" id="analyzeBtn" disabled>Analyze Replay</button>
+
+  <div class="spinner" id="spinner"></div>
+  <p class="status-msg" id="statusMsg"></p>
+
+  <!-- ── Results ── -->
+  <section id="results">
+
+    <div class="meta-bar" id="metaBar"></div>
+
+    <div>
+      <p class="section-heading">Players</p>
+      <div class="players-grid" id="playersGrid"></div>
+    </div>
+
+    
+  <div id="eventsSection" style="display:none">
+      <p class="section-heading">Named Events</p>
+      <div id="eventsContent"></div>
+  </div>
+
+    <div id="chatSection">
+      <p class="section-heading">In-game Chat</p>
+      <div class="chat-list" id="chatList"></div>
+    </div>
+
+  </section>
+
+</main>
+
+<footer>Built for the COH community &nbsp;·&nbsp; coh1_parser by dyxtra / Sander Dijkstra</footer>
+
+<script>
+  // ── CONFIG ────────────────────────────────────────────────────────────────
+  // Replace this with your deployed API URL once you have it:
+  const API_URL = "https://coh1-analyzer-api.onrender.com/parse/commands";
+  // const API_URL = "https://your-app.railway.app/parse/commands";
+  // const API_URL = "https://your-app.railway.app/parse";
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  const dropZone    = document.getElementById("dropZone");
+  const fileInput   = document.getElementById("fileInput");
+  const analyzeBtn  = document.getElementById("analyzeBtn");
+  const spinner     = document.getElementById("spinner");
+  const statusMsg   = document.getElementById("statusMsg");
+  const results     = document.getElementById("results");
+  const selectedName= document.getElementById("selectedName");
+
+  let selectedFile = null;
+
+  // ── File selection ────────────────────────────────────────────────────────
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+
+  dropZone.addEventListener("dragover", e => {
+    e.preventDefault();
+    dropZone.classList.add("drag-over");
+  });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    dropZone.classList.remove("drag-over");
+    const f = e.dataTransfer.files[0];
+    if (f && f.name.toLowerCase().endsWith(".rec")) setFile(f);
+    else showStatus("Only .rec files are supported.", true);
+  });
+
+  function setFile(f) {
+    selectedFile = f;
+    selectedName.textContent = f.name;
+    analyzeBtn.disabled = false;
+    results.classList.remove("visible");
+    showStatus("");
+  }
+
+  // ── Analyze ───────────────────────────────────────────────────────────────
+  analyzeBtn.addEventListener("click", async () => {
+    if (!selectedFile) return;
+
+    analyzeBtn.disabled = true;
+    spinner.classList.add("active");
+    showStatus("Analyzing…");
+    results.classList.remove("visible");
+
+    try {
+      const form = new FormData();
+      form.append("replay", selectedFile);
+
+      const resp = await fetch(API_URL, { method: "POST", body: form });
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        throw new Error(data.error || `Server error ${resp.status}`);
+      }
+
+      renderResults(data);
+      showStatus("");
+    } catch (err) {
+      showStatus(err.message, true);
+    } finally {
+      spinner.classList.remove("active");
+      analyzeBtn.disabled = false;
+    }
+  });
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  function renderResults(d) {
+    // Meta bar
+    document.getElementById("metaBar").innerHTML = `
+      <div class="meta-item">
+        <label>Map</label>
+        <div class="value">${esc(d.map_name)}</div>
+      </div>
+      <div class="meta-item">
+        <label>Duration</label>
+        <div class="value">${esc(d.duration)}</div>
+      </div>
+      <div class="meta-item">
+        <label>Date</label>
+        <div class="value" style="font-size:1rem">${esc(d.game_time)}</div>
+      </div>
+      <div class="meta-item">
+        <label>Game Version</label>
+        <div class="value version">${esc(d.game_version)}</div>
+      </div>
+    `;
+
+
+    // Events
+    const evtSection = document.getElementById("eventsSection");
+    const evtContent = document.getElementById("eventsContent");
+    if (d.events && d.events.length > 0) {
+      const byPlayer = {};
+      d.events.forEach(e => {
+        if (!byPlayer[e.player_id]) byPlayer[e.player_id] = [];
+        byPlayer[e.player_id].push(e);
+      });
+      let html = "";
+      Object.entries(byPlayer).forEach(([pid, evts]) => {
+        const player = d.players[parseInt(pid) - 1] || { name: `Player ${pid}` };
+        const upgrades = evts.filter(e => e.cmd_type === "UPGRADE");
+        const commands = evts.filter(e => e.cmd_type === "UNITCOMMAND");
+        html += `<div class="event-player"><span class="event-player-name">${esc(player.name)}</span>`;
+        if (upgrades.length) {
+          html += `<div class="event-group-label">Upgrades</div><div class="event-list">`;
+          upgrades.forEach(e => { html += `<div class="event-item"><span class="event-time">${esc(e.time_str)}</span><span class="event-name">${esc(e.cmd_name)}</span></div>`; });
+          html += `</div>`;
+        }
+        if (commands.length) {
+          const counts = {};
+          commands.forEach(e => counts[e.cmd_name] = (counts[e.cmd_name]||0)+1);
+          html += `<div class="event-group-label">Abilities used</div><div class="event-list">`;
+          Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([name, cnt]) => { html += `<div class="event-item"><span class="event-name">${esc(name)}</span><span class="event-count">×${cnt}</span></div>`; });
+          html += `</div>`;
+        }
+        html += `</div>`;
+      });
+      evtContent.innerHTML = html;
+      evtSection.style.display = "";
+    } else {
+      evtSection.style.display = "none";
+    }
+
+    // Players
+    const factionNames = {
+      allies:               "US Forces",
+      allies_commonwealth:  "British Forces",
+      axis:                 "Wehrmacht",
+      axis_panzer_elite:    "Panzer Elite",
+    };
+
+    document.getElementById("playersGrid").innerHTML = d.players.map(p => `
+      <div class="player-card team-${p.team}">
+        <span class="team-label">Team ${p.team + 1}</span>
+        <span class="player-faction-badge faction-${esc(p.faction_short)}">
+          ${esc(p.faction_short)} — ${esc(factionNames[p.faction] || p.faction)}
+        </span>
+        <div class="player-name">${esc(p.name)}</div>
+        <div class="player-meta">
+          <span class="type-${esc(p.type)}">${esc(p.type)}</span>
+        </div>
+      </div>
+    `).join("");
+
+    // Chat — parse internal UTF-16 chat format
+    const chatList = document.getElementById("chatList");
+    const parsed = d.chat.map(parseChatMsg).filter(Boolean);
+    if (parsed.length === 0) {
+      chatList.innerHTML = `<p class="no-chat">No in-game chat recorded.</p>`;
+    } else {
+      chatList.innerHTML = parsed.map(m =>
+        `<div class="chat-msg"><span class="chat-sender">${esc(m.sender)}:</span>${esc(m.text)}</div>`
+      ).join("");
+    }
+
+    results.classList.add("visible");
+    results.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /**
+   * Parse CoH1 internal chat packet.
+   * Layout (little-endian):
+   *   u32  type       (1 = player chat, 2 = system)
+   *   u32  total_len
+   *   u32  name_chars (UTF-16 char count)
+   *   [name in UTF-16LE]
+   *   u32  unk
+   *   u32  unk
+   *   u32  msg_chars
+   *   [message in UTF-16LE]
+   */
+  function parseChatMsg(raw) {
+    try {
+      // raw is a JS string from JSON (was decoded as UTF-8 lossy),
+      // reconstruct bytes
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i) & 0xff;
+      const dv = new DataView(bytes.buffer);
+
+      const type = dv.getUint32(0, true);
+      if (type !== 1) return null;  // skip system messages
+
+      let pos = 8;
+      const nameChars = dv.getUint32(pos, true); pos += 4;
+      let name = "";
+      for (let i = 0; i < nameChars; i++) {
+        name += String.fromCharCode(dv.getUint16(pos, true)); pos += 2;
+      }
+      pos += 8; // skip two u32 unknowns
+      const msgChars = dv.getUint32(pos, true); pos += 4;
+      let text = "";
+      for (let i = 0; i < msgChars; i++) {
+        text += String.fromCharCode(dv.getUint16(pos, true)); pos += 2;
+      }
+      if (!name || !text) return null;
+      return { sender: name, text };
+    } catch {
+      return null;
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function showStatus(msg, isError = false) {
+    statusMsg.textContent = msg;
+    statusMsg.className = "status-msg" + (isError ? " error" : "");
+  }
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;");
+  }
+</script>
+</body>
+</html>
