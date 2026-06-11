@@ -94,6 +94,12 @@ main { display:flex; flex-direction:column; align-items:center; padding:2.5rem 1
 .type-GLOBAL { color:#c87ad4; }
 .type-DOCTRINAL { color:#d4ca6a; }
 .type-SELECT_DOCTRINE { color:#6ac4d4; }
+/* Chat */
+.chat-log { display:flex; flex-direction:column; gap:.3rem; }
+.chat-msg { background:var(--ink2); border:1px solid rgba(74,82,64,.4); border-radius:2px; padding:.3rem .7rem; font-size:.8rem; }
+.chat-msg .chat-sender { color:var(--rust); font-weight:600; margin-right:.4rem; }
+.chat-msg .chat-text { color:var(--cream); }
+.no-chat { font-size:.75rem; color:var(--olive-lt); letter-spacing:.06em; text-transform:uppercase; }
 footer { text-align:center; padding:1.5rem; font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; color:var(--olive); border-top:1px solid var(--olive); }
 @media(max-width:520px) { header{flex-direction:column;gap:.2rem} .meta-bar{grid-template-columns:1fr 1fr} }
 </style>
@@ -119,6 +125,7 @@ footer { text-align:center; padding:1.5rem; font-size:.68rem; letter-spacing:.1e
     <div><p class="sh">Players</p><div class="players-grid" id="playersGrid"></div></div>
     <div><p class="sh">Statistics</p><div class="stats-grid" id="statsGrid"></div></div>
     <div><p class="sh">Timeline</p><div class="filter-bar" id="filterBar"></div><div class="timeline" id="timeline"></div></div>
+    <div id="chatSection"><p class="sh">Chat</p><div class="chat-log" id="chatLog"></div></div>
   </section>
 </main>
 <footer>Powered by C2A.EXE — COH/COH2 Analyzer by dyxtra</footer>
@@ -156,6 +163,7 @@ analyzeBtn.addEventListener('click', async()=>{
 
 function renderResults(d){
   playerTeams={};
+  // FIX: ahora p.mpn existe en cada jugador (añadido por app.py v5)
   (d.players||[]).forEach(p=>{ playerTeams[p.mpn]=p.team; });
 
   const typeLabel=(d.game_type||'')==='ranked'
@@ -169,7 +177,10 @@ function renderResults(d){
 
   const facNames={USA:'US Forces',BRIT:'British Forces',WEHR:'Wehrmacht',PANZ:'Panzer Elite'};
   document.getElementById('playersGrid').innerHTML=(d.players||[]).map(p=>{
+    // FIX: p.faction ya es el short form (USA/BRIT/WEHR/PANZ) gracias a app.py v5
+    // FIX: p.result ahora existe
     const rHtml=p.result==='Won'?'<span class="result-won">✓ Won</span>':p.result==='Lost'?'<span class="result-lost">✗ Lost</span>':'';
+    // FIX: stats usa p.mpn
     const doc=(d.stats||{})[String(p.mpn)]?.doctrine||'';
     return `<div class="player-card team-${p.team}">
       <span class="team-lbl">Team ${p.team+1}</span>
@@ -178,12 +189,12 @@ function renderResults(d){
       <div class="player-sub">
         <span class="hl">${esc(p.type)}</span>
         ${doc?` &nbsp;·&nbsp; <span class="hl">${esc(doc)}</span>`:''}
-        ${rHtml?` &nbsp;·&nbsp; ${rHtml}`:''}
-      </div></div>`;
+        ${rHtml?` &nbsp;·&nbsp; ${rHtml}`:''}</div></div>`;
   }).join('');
 
   const sg=document.getElementById('statsGrid'); sg.innerHTML='';
   (d.players||[]).forEach(p=>{
+    // FIX: stats keyed by p.mpn
     const s=(d.stats||{})[String(p.mpn)]; if(!s) return;
     const panel=document.createElement('div'); panel.className='stat-panel';
     let html=`<div class="stat-panel-title"><span>${esc(p.name)}</span><small>CPM ${s.cpm} &nbsp;·&nbsp; +${s.reinforce} reinf &nbsp;·&nbsp; ${s.retreat} ret</small></div>`;
@@ -196,10 +207,30 @@ function renderResults(d){
     panel.innerHTML=html; sg.appendChild(panel);
   });
 
+  // FIX: eventos ahora usan .mpn / .type / .name (renombrados en app.py v5)
   const SKIP=new Set(['CANCEL','CANCEL_BUILDING','PICKUP_WEAPON','AI_TAKEOVER','REINFORCE','RETREAT']);
   allEvents=(d.events||[]).filter(e=>!SKIP.has(e.type));
   buildFilterBar(d.players||[]);
   renderTimeline();
+
+  // Chat (existía en parser pero nunca se mostraba)
+  const chatLog=document.getElementById('chatLog');
+  const chatSection=document.getElementById('chatSection');
+  const chatMsgs=d.chat||[];
+  if(chatMsgs.length){
+    chatSection.style.display='';
+    chatLog.innerHTML=chatMsgs.map(m=>{
+      // Formato típico de COH: "PlayerName: mensaje"
+      const sep=m.indexOf(':');
+      if(sep>0&&sep<30){
+        return `<div class="chat-msg"><span class="chat-sender">${esc(m.slice(0,sep))}</span><span class="chat-text">${esc(m.slice(sep+1).trim())}</span></div>`;
+      }
+      return `<div class="chat-msg"><span class="chat-text">${esc(m)}</span></div>`;
+    }).join('');
+  } else {
+    chatSection.style.display='none';
+  }
+
   results.classList.add('visible');
   results.scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -218,6 +249,7 @@ function buildFilterBar(players){
     bar.appendChild(btn);
   };
   mk('All','ALL');
+  // FIX: filtro por jugador usa p.mpn
   players.forEach(p=>mk(p.name.split(/[\s|]+/).pop(),'MPN:'+p.mpn));
   ['MAKE','BUILD','UPGRADE','ABILITY','GLOBAL','DOCTRINAL'].forEach(t=>mk(t[0]+t.slice(1).toLowerCase(),'TYPE:'+t));
 }
@@ -226,7 +258,9 @@ function renderTimeline(){
   const tl=document.getElementById('timeline');
   const filtered=allEvents.filter(e=>{
     if(activeFilter==='ALL') return true;
+    // FIX: e.mpn (ya renombrado por app.py v5)
     if(activeFilter.startsWith('MPN:')) return e.mpn===parseInt(activeFilter.slice(4));
+    // FIX: e.type (ya renombrado)
     if(activeFilter.startsWith('TYPE:')) return e.type===activeFilter.slice(5);
     return true;
   });
