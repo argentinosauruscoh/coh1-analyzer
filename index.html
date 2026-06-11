@@ -130,7 +130,9 @@ footer { text-align:center; padding:1.5rem; font-size:.68rem; letter-spacing:.1e
 </main>
 <footer>Powered by C2A.EXE — COH/COH2 Analyzer by dyxtra</footer>
 <script>
-const API_URL = "https://coh1-analyzer-api.onrender.com/parse";
+const API_URL = window.location.hostname === "localhost"
+  ? "http://localhost:5000/parse"
+  : "https://coh1-analyzer-api.onrender.com/parse";
 
 const dropZone=document.getElementById('dropZone'),fileInput=document.getElementById('fileInput'),
       analyzeBtn=document.getElementById('analyzeBtn'),spinner=document.getElementById('spinner'),
